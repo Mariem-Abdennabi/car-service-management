@@ -1,0 +1,39 @@
+package views
+
+import "github.com/Mariem-Abdennabi/car-service-management/assets"
+
+// Layout is the HTML shell every page renders inside.
+//
+// `{ children... }` is templ's slot: whatever a caller nests inside `@Layout(...)
+// { ... }` is rendered there. That is why pages compose rather than repeat — the
+// <head>, the bundle links, and the page furniture are written once.
+//
+// The Assets parameter carries the hashed filenames Vite produced, which cannot be
+// hard-coded because they change whenever the bundle changes. Passing it in rather
+// than reading a package-level variable keeps the component a pure function of its
+// inputs, so a test can render it without any global setup.
+templ Layout(title string, a assets.Assets) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · Car Service</title>
+			<link rel="stylesheet" href={ a.CSS }/>
+			// type="module" because Vite outputs ES modules. `defer` is implied for
+			// modules, which is what Alpine needs — it scans the DOM on start.
+			<script type="module" src={ a.JS }></script>
+		</head>
+		<body class="min-h-screen bg-slate-50 text-slate-900">
+			<header class="border-b border-slate-200 bg-white">
+				<nav class="mx-auto flex max-w-5xl items-baseline gap-3 px-6 py-4">
+					<a href="/" class="text-lg font-semibold tracking-tight">Car Service</a>
+					<span class="text-sm text-slate-500">Spare Parts Management</span>
+				</nav>
+			</header>
+			<main class="mx-auto max-w-5xl px-6 py-10">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

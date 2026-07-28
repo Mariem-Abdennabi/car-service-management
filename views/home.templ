@@ -1,0 +1,22 @@
+package views
+
+import "github.com/Mariem-Abdennabi/car-service-management/assets"
+
+// Home is the landing page.
+//
+// It calls Layout with `@`, which is how one templ component renders another, and
+// nests its own markup in Layout's children slot. It forwards Assets because
+// Layout needs it — that threading is the price of having no globals.
+templ Home(a assets.Assets) {
+	@Layout("Home", a) {
+		<h1 class="text-2xl font-semibold tracking-tight">
+			Car Service &amp; Spare Parts Management
+		</h1>
+		<p class="mt-3 max-w-prose text-slate-600">
+			The workshop's customers, vehicles, spare parts, repair jobs, and invoices.
+		</p>
+		<p class="mt-8 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+			Nothing to manage yet — customers arrive in Milestone 3.
+		</p>
+	}
+}

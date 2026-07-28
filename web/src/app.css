@@ -1,0 +1,14 @@
+/* Tailwind CSS v4. Imported by app.js, so Vite compiles it into the bundle.
+ *
+ * v4 has no tailwind.config.js — configuration lives here in CSS. This import
+ * pulls in the preflight reset, the utility classes, and the default theme.
+ * Design tokens (brand colours, fonts, spacing) go in an `@theme { }` block when
+ * the application needs them.
+ *
+ * @source is required because Tailwind scans for class names starting from this
+ * Vite project, and the templates live outside it at the repository root. Without
+ * this line the stylesheet compiles to almost nothing.
+ */
+@import "tailwindcss";
+
+@source "../../views";

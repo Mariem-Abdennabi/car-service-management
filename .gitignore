@@ -1,0 +1,30 @@
+# Compiled binaries
+/bin/
+
+# Vite output — regenerate with `make assets`.
+/public/build/
+
+# Frontend dependencies. web/bun.lock IS committed so builds are reproducible.
+node_modules/
+
+# Environment files — these hold credentials and are machine-specific.
+# .env.example is committed as documentation; the real one never is.
+.env
+.env.*
+!.env.example
+
+# Go test and profiling output
+*.test
+*.out
+
+# macOS
+.DS_Store
+
+# Editor / IDE local settings
+.idea/
+.vscode/
+*.swp
+
+# Note on templ: generated *_templ.go files ARE committed on purpose, so that
+# `go build ./...` works for anyone with only the Go toolchain installed. The cost
+# is noisier diffs; the benefit is a repo that always compiles.
