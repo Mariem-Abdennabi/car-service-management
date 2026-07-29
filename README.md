@@ -5,9 +5,10 @@ jobs, and invoices.
 
 Built as a Go full-stack application, server-rendered, one milestone at a time.
 
-> **Status: early development.** Milestones 0 and 1 are complete: the server runs, renders a styled
-> page from a Templ template, and serves a Vite bundle. No database yet — see
-> [docs/progress.md](docs/progress.md) for exactly where things stand.
+> **Status: early development.** The server runs, renders a styled page from a Templ template, serves a
+> Vite bundle, and talks to PostgreSQL through pgx with migrations and sqlc-generated queries. No
+> feature screens yet — see
+> [docs/roadmap.md](docs/roadmap.md) for exactly where things stand.
 
 ## Stack
 
@@ -45,8 +46,7 @@ Six modules, built in dependency order:
 | [development-workflow.md](docs/development-workflow.md) | Daily loop, commands, definition of done, commit convention |
 | [coding-standards.md](docs/coding-standards.md) | How the code is written: errors, tests, Templ, HTMX vs Alpine |
 | [project-structure.md](docs/project-structure.md) | Every directory, why it exists, naming conventions |
-| [roadmap.md](docs/roadmap.md) | Milestones 0–9 and the reasoning behind their order |
-| [progress.md](docs/progress.md) | What is actually done, updated each step |
+| [roadmap.md](docs/roadmap.md) | **Every milestone and step — done, next, and why** |
 | [backlog.md](docs/backlog.md) | Deferred ideas, with the reason each is deferred |
 | [decisions/](docs/decisions/) | ADRs: architecture, sqlc, Templ, Gin |
 
@@ -64,6 +64,9 @@ cd web && bun install && cd ..   # frontend dependencies
 make assets                      # build the Vite bundle
 make run                         # http://localhost:8080
 ```
+
+A PostgreSQL server must be reachable at the `DATABASE_URL` in `.env`. The database can be empty —
+migrations run on startup.
 
 `make` on its own lists every available command. `make check` — format, vet, test — is the one to run
 before committing.
