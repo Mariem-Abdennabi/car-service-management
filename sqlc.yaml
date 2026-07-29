@@ -1,0 +1,23 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    # sqlc reads the migrations to learn the schema, so it knows every column's
+    # real type. That is what makes a renamed column a generation error instead of
+    # a runtime surprise. It understands golang-migrate's naming and ignores the
+    # .down.sql files.
+    schema: "sql/migrations"
+    queries: "sql/queries"
+    gen:
+      go:
+        package: "db"
+        out: "internal/db"
+        # Generate code that uses pgx directly rather than database/sql, matching
+        # the pool the application already runs on.
+        sql_package: "pgx/v5"
+        overrides:
+          # By default the pgx/v5 mapping gives every timestamptz a
+          # pgtype.Timestamptz, whose value is read as `.Time`. These columns are
+          # NOT NULL, so plain time.Time is accurate and keeps a pgx type out of
+          # the structs the templates render.
+          - db_type: "timestamptz"
+            go_type: "time.Time"

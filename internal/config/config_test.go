@@ -14,9 +14,9 @@ func TestLoad(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "applies defaults when nothing is set",
-			env:  map[string]string{},
-			want: Config{Env: "development", Port: 8080},
+			name: "applies defaults for the optional settings",
+			env:  map[string]string{"DATABASE_URL": "postgres://localhost:5432/db"},
+			want: Config{Env: "development", Port: 8080, DatabaseURL: "postgres://localhost:5432/db"},
 		},
 		{
 			name: "reads values from the environment",
@@ -29,17 +29,22 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name:    "rejects an unknown environment name",
-			env:     map[string]string{"APP_ENV": "staging"},
+			env:     map[string]string{"APP_ENV": "staging", "DATABASE_URL": "postgres://localhost/db"},
 			wantErr: true,
 		},
 		{
 			name:    "rejects a non-numeric port",
-			env:     map[string]string{"PORT": "eighty-eighty"},
+			env:     map[string]string{"PORT": "eighty-eighty", "DATABASE_URL": "postgres://localhost/db"},
 			wantErr: true,
 		},
 		{
 			name:    "rejects a port outside the valid range",
-			env:     map[string]string{"PORT": "70000"},
+			env:     map[string]string{"PORT": "70000", "DATABASE_URL": "postgres://localhost/db"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects a missing DATABASE_URL",
+			env:     map[string]string{},
 			wantErr: true,
 		},
 	}

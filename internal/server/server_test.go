@@ -1,13 +1,16 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/Mariem-Abdennabi/car-service-management/assets"
 	"github.com/Mariem-Abdennabi/car-service-management/internal/config"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
 )
 
 // newTestServer builds a Server for tests.
@@ -16,27 +19,44 @@ import (
 // port is irrelevant because these tests drive the router directly and never bind
 // a socket, and the asset URLs are fixed rather than read from a real Vite
 // manifest — the point is that the layout renders whatever it is given.
-func newTestServer() *Server {
+//
+// db may be nil: the pages below do not touch the database, so only the health
+// check needs a real one.
+func newTestServer(db *store.Store) *Server {
 	return New(
 		config.Config{Env: "production", Port: 8080},
 		assets.Assets{JS: "/build/app.js", CSS: "/build/app.css"},
+		db,
 	)
 }
 
 // do sends a request through the router without starting a real HTTP server.
 // httptest.NewRecorder stands in for the response writer, so these tests need no
 // network at all and run in microseconds.
-func do(t *testing.T, method, path string) *httptest.ResponseRecorder {
+func do(t *testing.T, db *store.Store, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	recorder := httptest.NewRecorder()
-	newTestServer().router.ServeHTTP(recorder, httptest.NewRequest(method, path, nil))
+	newTestServer(db).router.ServeHTTP(recorder, httptest.NewRequest(method, path, nil))
 
 	return recorder
 }
 
+// TestHandleHealth needs a real database, since the whole point of the endpoint
+// now is that it reports the database's reachability.
 func TestHandleHealth(t *testing.T) {
-	got := do(t, http.MethodGet, "/healthz")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set; skipping database tests")
+	}
+
+	db, err := store.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+
+	got := do(t, db, http.MethodGet, "/healthz")
 
 	if got.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", got.Code, http.StatusOK)
@@ -50,7 +70,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleHome(t *testing.T) {
-	got := do(t, http.MethodGet, "/")
+	got := do(t, nil, http.MethodGet, "/")
 
 	if got.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", got.Code, http.StatusOK)
@@ -80,7 +100,7 @@ func TestHandleHome(t *testing.T) {
 }
 
 func TestUnknownRouteIsNotFound(t *testing.T) {
-	got := do(t, http.MethodGet, "/no-such-page")
+	got := do(t, nil, http.MethodGet, "/no-such-page")
 
 	if got.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", got.Code, http.StatusNotFound)

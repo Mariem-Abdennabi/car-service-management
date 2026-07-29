@@ -12,6 +12,7 @@ import (
 
 	"github.com/Mariem-Abdennabi/car-service-management/assets"
 	"github.com/Mariem-Abdennabi/car-service-management/internal/config"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
 )
 
 // Server holds everything the HTTP handlers need.
@@ -23,11 +24,12 @@ import (
 type Server struct {
 	cfg    config.Config
 	assets assets.Assets
+	store  *store.Store
 	router *gin.Engine
 }
 
 // New builds a Server with its middleware and routes already registered.
-func New(cfg config.Config, builtAssets assets.Assets) *Server {
+func New(cfg config.Config, builtAssets assets.Assets, db *store.Store) *Server {
 	if !cfg.IsDevelopment() {
 		// Suppresses Gin's start-up banner and debug warnings.
 		gin.SetMode(gin.ReleaseMode)
@@ -47,7 +49,7 @@ func New(cfg config.Config, builtAssets assets.Assets) *Server {
 		router.Use(gin.Logger())
 	}
 
-	s := &Server{cfg: cfg, assets: builtAssets, router: router}
+	s := &Server{cfg: cfg, assets: builtAssets, store: db, router: router}
 	s.registerRoutes()
 
 	return s

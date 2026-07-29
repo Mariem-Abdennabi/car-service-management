@@ -22,7 +22,7 @@ import (
 type Config struct {
 	Env         string // "development" or "production"
 	Port        int    // port the HTTP server listens on
-	DatabaseURL string // PostgreSQL connection string; unused until Milestone 2
+	DatabaseURL string // PostgreSQL connection string
 }
 
 // LoadFile reads `key=value` lines from an environment file, usually ".env",
@@ -64,10 +64,17 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("PORT must be between 1 and 65535, got %d", port)
 	}
 
+	// Required, with no sensible default: guessing a connection string would only
+	// turn a missing setting into a confusing connection error.
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return Config{}, fmt.Errorf("DATABASE_URL is required (see .env.example)")
+	}
+
 	return Config{
 		Env:         env,
 		Port:        port,
-		DatabaseURL: os.Getenv("DATABASE_URL"),
+		DatabaseURL: databaseURL,
 	}, nil
 }
 
