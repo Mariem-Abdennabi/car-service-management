@@ -1,0 +1,47 @@
+package views
+
+// The nav sections, so a page can say which one it belongs to and the header can
+// mark it. Constants rather than loose strings: a typo is then a compile error.
+const (
+	NavHome      = "home"
+	NavCustomers = "customers"
+	NavParts     = "parts"
+)
+
+// PageHeader is the title row every page starts with, optionally with one action
+// button on the right.
+templ PageHeader(title string) {
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<h1 class="text-2xl font-semibold tracking-tight text-slate-900">{ title }</h1>
+		{ children... }
+	</div>
+}
+
+// BackLink is the "← somewhere" link above a page title.
+templ BackLink(href, label string) {
+	<a
+		href={ href }
+		class="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-900"
+	>
+		<span aria-hidden="true">←</span>
+		{ label }
+	</a>
+}
+
+// EmptyState is what a list shows before anything exists. Worth designing rather
+// than leaving blank: it is the first thing a new user sees.
+templ EmptyState(message, hint string) {
+	<div class="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+		<p class="text-sm font-medium text-slate-900">{ message }</p>
+		if hint != "" {
+			<p class="mt-1 text-sm text-slate-500">{ hint }</p>
+		}
+	</div>
+}
+
+// Card is a white panel — the surface everything sits on.
+templ Card() {
+	<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+		{ children... }
+	</div>
+}

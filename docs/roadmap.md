@@ -12,26 +12,20 @@ Milestone 2 onward, **one new tool per step**, so each tool's contribution stays
 
 | | |
 | --- | --- |
-| **Done** | Milestone 0 foundation · Milestone 1 frontend pipeline · Milestone 2 database |
-| **Next** | Milestone 3 — Customers, the first full feature · awaiting approval |
-| **Blocked on you** | `cd web && bun install` then `make assets` — needed before any page renders |
+| **Done** | Milestone 0 foundation · 1 frontend · 2 database · 3 customers · 4 vehicles |
+| **Done** | Milestone 5 — Spare parts (full CRUD) |
+| **Current** | Design pass and the dashboard · done. Next: `make seed`, awaiting approval |
 
-### The one outstanding action
+The application runs end to end: `make run`, then `http://localhost:8080`. Customers can be listed,
+searched, created, edited, and deleted, against PostgreSQL, with the Vite bundle served from
+`public/build`.
 
-`web/package.json` pins **Vite 8**, per the stack. Vite 8's Rolldown native binding could not be
-downloaded in the environment these steps were written in: `bun install` failed to extract the
-tarball, `npm` failed with an SSL cipher error. Both are network failures, not project failures.
+### Frontend build
 
-So `web/bun.lock` and `web/node_modules/` do not exist yet. Run:
-
-```sh
-cd web && bun install && cd ..
-make assets
-make run
-```
-
-The Vite config was verified end to end on Vite 7, which takes identical configuration, producing the
-hashed bundle and manifest exactly as expected.
+`web/package.json` pins **Vite 8** with Rolldown, per the stack. `make assets` calls
+`web/node_modules/.bin/vite` — the binary `bun install` puts there, so it is the version pinned in
+`bun.lock`. `bun run build` reaches the same place through `package.json`, and works if your `bun run`
+is healthy; it is not in the environment these steps were written in.
 
 ### The PostgreSQL server
 
@@ -45,6 +39,23 @@ psql "$DATABASE_URL" -c "select version();"
 
 Pages before the database was considered on 2026-07-29 and **rejected** — the database comes first, so
 every screen is built against real data instead of a fixture that has to be thrown away.
+
+### Design and validation pass — 2026-07-30
+
+A visual pass over the whole application, not a new module:
+
+- **Design tokens in `web/src/app.css`.** A `brand` colour defined in `@theme`, so changing it later is
+  one line rather than a find-and-replace through every template.
+- **`views/ui.templ`** holds the pieces every page reuses: `PageHeader`, `BackLink`, `EmptyState`,
+  `Card`. Shared markup written once.
+- **The header marks the current section**, using `aria-current="page"` as well as colour — colour alone
+  says it only to people who can see it.
+- **The home page is a dashboard**: counts, the five most recent customers, and the parts that need
+  restocking. One query for the counts rather than four round trips.
+- **Field rules** live in `internal/server/validate.go` and are shared by all three forms: length limits
+  counted in *runes* rather than bytes, and a phone check that requires enough digits to be a real
+  number without dictating a format — `+216 20 145 872`, `20145872`, and `(216) 20-145-872` are all the
+  same number, and a strict pattern mostly rejects valid input.
 
 ---
 
@@ -83,8 +94,8 @@ reads Vite's manifest at startup and the layout links whatever it reports. A mis
 startup error — a server that started anyway would serve every page unstyled, which looks like a CSS
 bug rather than a missing build.
 
-**The caveat:** htmx and Alpine are bundled and loaded, but **nothing on the page uses either**. They
-are installed, not exercised. Their first real use is Milestone 3.
+**The caveat, now closed:** htmx and Alpine were bundled but unused until Milestone 3 — installed, not
+exercised. Search (3d) and the delete confirm (3e) fixed that.
 
 **Removed during 1.5:** the vendored JS directory, a throwaway htmx demo, `air`, and an ADR that had
 argued against Vite. Steps 1.2–1.4 churned — three approaches to CSS, three to JavaScript delivery —
@@ -127,25 +138,96 @@ single table is quicker to insert by hand than to build a seeder for.
 new numbered pair. Editing an applied migration means the schema in the database and the schema in the
 files disagree, with nothing to detect it.
 
-## Milestone 3 — Customers ⬜
+## Milestone 3 — Customers ✅
 
 **Goal:** one complete feature, end to end: list, create, view, edit, delete.
 
-**Also where htmx and Alpine finally do real work** — an htmx-swapped list row, an Alpine
-delete-confirm — closing the caveat left by Milestone 1.
+| Step | What | |
+| ---- | ---- | - |
+| 3a | List and detail pages, `views/customers.templ`, a 404 page used for unmatched routes too | ✅ |
+| 3b | Create: `GET /customers/new`, `POST /customers`, required-field validation that redraws the form with what was typed | ✅ |
+| 3c | Edit and delete: one form component shared by new and edit, `customerFromPath` shared by every handler that takes an `:id` | ✅ |
+| 3d | htmx: `?q=` search on the list. One handler answers both a page and a fragment, switching on the `HX-Request` header. **Closes half the Milestone 1 caveat** — htmx now does real work. | ✅ |
+| 3e | Alpine: confirm before deleting, as a progressive enhancement — the button stays a real submit, so delete still works with JavaScript off. **Closes the Milestone 1 caveat.** | ✅ |
+
+**The pattern every later module copies:** query in `sql/queries` → `make sqlc` → a method on `store`
+→ a handler on `Server` → a component in `views` → a test that runs against the real database.
+
+Three things settled here that are worth not re-deciding:
+
+- `store.ErrNotFound` — the store translates the driver's `pgx.ErrNoRows` into its own sentinel, so
+  handlers answer 404 without importing pgx.
+- **Writes are always `POST`**, even deletes, because that is what an HTML form can send. One route
+  that works without JavaScript beats two routes where one needs it.
+- **htmx for server state, Alpine for client state.** Searching asks the server, because the answer
+  lives in the database. Confirming a delete does not, because "am I sure?" never leaves the browser.
 
 **Why customers first:** the simplest entity in the domain, with no dependencies on any other table.
 The honest place to establish the pattern every later module copies: SQL → sqlc → store → handler →
 Templ page → htmx → test → docs.
 
-## Milestone 4 — Vehicles ⬜
+## Milestone 4 — Vehicles ✅
 
 Vehicles belonging to customers. The first foreign key, the first nested URL, and the first "list of
 children on a parent's page".
 
-## Milestone 5 — Spare parts and stock ⬜
+| Step | What | |
+| ---- | ---- | - |
+| 4a | `vehicles` table with a foreign key, `VehiclesByCustomer`, vehicles listed on the customer page, and a refused delete explained rather than crashed | ✅ |
+| 4b | Add a vehicle: nested form, first non-string field (`year`) with its own parse-and-range validation | ✅ |
+| 4c | Edit and delete a vehicle, on unnested `/vehicles/:id` routes, with `vehicleFromPath` loading the owner from the vehicle | ✅ |
+
+**`ON DELETE RESTRICT`, not `CASCADE`.** Deleting a customer who still has vehicles is refused, so a
+workshop's records cannot vanish because someone clicked Delete. Cascade would have been less code and
+the wrong default.
+
+PostgreSQL reports the refusal as SQLSTATE 23503. The store translates it to `store.ErrInUse` and the
+handler redraws the page with a message and **409 Conflict** — without that translation the visitor
+gets a 500 for a perfectly reasonable click.
+
+The foreign key is indexed explicitly: PostgreSQL indexes a primary key automatically but **not** a
+foreign key, and every vehicle lookup goes through its customer.
+
+**Nested for creating, unnested for the rest.** `POST /customers/:id/vehicles` needs the customer,
+because that is where the owner comes from. `/vehicles/:id` does not: the id is unique, and putting the
+customer back in the path would allow `/customers/1/vehicles/2` where the vehicle belongs to someone
+else. `vehicleFromPath` reads the owner from the vehicle, so a page cannot show one customer's name
+above another's car.
+
+**Form values are always strings in the view model.** `VehicleForm.Year` is a `string`, not an `int`,
+because a rejected form has to redraw exactly what was typed and "not a year" is not an `int`. Parsing
+is part of validation, and `validateVehicle` returns the parsed year so the caller never parses it
+twice.
+
+## Milestone 5 — Spare parts and stock ✅
 
 A parts catalogue with quantity on hand, so parts can later be consumed by a repair job.
+
+| Step | What | |
+| ---- | ---- | - |
+| 5a | `parts` table, catalogue list with prices and an out-of-stock marker | ✅ |
+| 5b | Create a part, with the price typed in dinars and stored exactly as millimes, and a unique `reference` | ✅ |
+| 5c | Edit and delete | ✅ |
+
+**Money is a whole number of millimes, never a float.** `0.1 + 0.2` is not `0.3` in binary floating
+point, and prices get added up — a rounding error that is invisible on one part becomes a wrong invoice
+total. `price_millimes` is an `INTEGER`; `views.Millimes` puts the decimal point back for display, and
+is the only place it exists.
+
+**Two `CHECK` constraints** — price and quantity cannot go negative. The form will refuse it too, but
+the database is the only place that still holds when two requests adjust the same row at once, which is
+exactly what happens once repair jobs consume parts.
+
+**Parsing a price never goes through a float.** `strconv.ParseFloat("8.29") * 1000` gives 8289, not
+8290, which is the exact error the integer column exists to avoid. `parseMillimes` splits on the
+decimal point and parses two integers. More than three decimals is rejected rather than rounded — a
+price the visitor did not type is worse than an error.
+
+**A duplicate reference is a field error, not a 500.** The unique index reports SQLSTATE 23505; the
+store translates it to `store.ErrDuplicate` and the form points at the reference box.
+
+**Quantity is a plain number for now.** Real inventory records movements and derives the total.
+Deferred to [backlog.md](backlog.md) with the trigger: Milestone 6, when jobs start consuming stock.
 
 ## Milestone 6 — Service jobs ⬜
 

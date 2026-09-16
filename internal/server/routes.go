@@ -12,7 +12,33 @@ func (s *Server) registerRoutes() {
 
 	// Pages
 	s.router.GET("/", s.handleHome)
+	s.router.GET("/customers", s.handleCustomers)
+	s.router.GET("/customers/new", s.handleNewCustomer)
+	s.router.POST("/customers", s.handleCreateCustomer)
+	s.router.GET("/customers/:id", s.handleCustomer)
+	s.router.GET("/customers/:id/edit", s.handleEditCustomer)
+	s.router.POST("/customers/:id", s.handleUpdateCustomer)
+	s.router.POST("/customers/:id/delete", s.handleDeleteCustomer)
+	s.router.GET("/customers/:id/vehicles/new", s.handleNewVehicle)
+	s.router.POST("/customers/:id/vehicles", s.handleCreateVehicle)
+
+	// Not nested: a vehicle id is already unique, and /customers/1/vehicles/2 would
+	// allow a URL where vehicle 2 belongs to someone else. The owner is read from
+	// the vehicle instead.
+	s.router.GET("/vehicles/:id/edit", s.handleEditVehicle)
+	s.router.POST("/vehicles/:id", s.handleUpdateVehicle)
+	s.router.POST("/vehicles/:id/delete", s.handleDeleteVehicle)
 
 	// Operational
+	s.router.GET("/parts", s.handleParts)
+	s.router.GET("/parts/new", s.handleNewPart)
+	s.router.POST("/parts", s.handleCreatePart)
+	s.router.GET("/parts/:id/edit", s.handleEditPart)
+	s.router.POST("/parts/:id", s.handleUpdatePart)
+	s.router.POST("/parts/:id/delete", s.handleDeletePart)
+
 	s.router.GET("/healthz", s.handleHealth)
+
+	// Anything unmatched gets the same 404 page as a missing record.
+	s.router.NoRoute(s.notFound)
 }

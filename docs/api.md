@@ -63,25 +63,157 @@ Why `/healthz` and not `/health`: the trailing `z` is a Kubernetes-era conventio
 operational endpoints from colliding with a real application route. If this system ever gains a page
 about vehicle health, `/health` is still free.
 
-## Features
+## Customers
 
-None yet. Customers arrive at Milestone 3, and this section grows with them.
+| Method | Path | Purpose | |
+| ------ | ---- | ------- | - |
+| `GET` | `/customers` | list | ✅ |
+| `GET` | `/customers/:id` | detail | ✅ |
+| `GET` | `/customers/new` | the create form | ✅ |
+| `POST` | `/customers` | create | ✅ |
+| `GET` | `/customers/:id/edit` | the edit form | ✅ |
+| `POST` | `/customers/:id` | update | ✅ |
+| `POST` | `/customers/:id/delete` | delete | ✅ |
 
-Each feature will follow the same URL shape:
+Every write is a `POST`, because HTML forms only support `GET` and `POST`. Deleting could have been
+`DELETE /customers/:id` with htmx issuing it, but that route would only work with JavaScript enabled —
+a second route for the same action. One `POST` that a plain form can reach is simpler, and htmx can
+still enhance it.
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/customers` | list |
-| `GET` | `/customers/new` | the create form |
-| `POST` | `/customers` | create |
-| `GET` | `/customers/:id` | detail |
-| `GET` | `/customers/:id/edit` | the edit form |
-| `POST` | `/customers/:id` | update |
-| `DELETE` | `/customers/:id` | delete |
+### `GET /customers`
 
-`POST` rather than `PUT`/`PATCH` for updates because HTML forms only support `GET` and `POST`, and
-HTMX is the only thing that would issue the others. Sticking to what a plain form can do keeps the
-application working without JavaScript.
+The list, newest first. Optional `?q=` filters by name, case-insensitively and on any part of the
+name. An empty `q` returns everyone.
+
+**Two response shapes from one handler:**
+
+| Request | Response |
+| ------- | -------- |
+| normal | the full page |
+| `HX-Request: true` | just the `#customer-list` element |
+
+htmx sets that header, so searching needs no second route. The fragment is the same component the page
+renders, called without a layout around it — about 700 bytes against 2 KB for the page.
+
+The fragment carries the `id="customer-list"` that htmx targets. It has to: the swap is `outerHTML`, so
+a response without the id would replace the element with something the next search cannot find.
+
+### `GET /customers/:id`
+
+One customer, with their vehicles listed underneath. **404** when no row has that id, and also when the id is not a number — `/customers/abc`
+is simply not a page, so there is nothing to report as a bad request.
+
+### `GET /customers/new`
+
+The create form.
+
+### `POST /customers`
+
+Creates a customer from `name`, `phone`, and `city`. All three are required, and values are trimmed, so
+a field of spaces counts as empty.
+
+- **303 See Other** to `/customers/:id` on success. A redirect rather than a rendered page, so a
+  refresh cannot submit the form twice.
+- **422 Unprocessable Content** on a validation failure, re-rendering the form with the submitted
+  values and one message per bad field. Not 400: the request was well formed, its contents were not.
+
+### `GET /customers/:id/edit`
+
+The edit form, pre-filled with the customer's current details. **404** for an unknown id.
+
+### `POST /customers/:id`
+
+Updates a customer. Same validation and the same 303/422 behaviour as creating one, and a rejected
+submission leaves the stored row untouched. **404** for an unknown id.
+
+### `POST /customers/:id/delete`
+
+Deletes a customer, then **303** to `/customers`. **404** for an unknown id.
+
+**409 Conflict** when the customer still has vehicles: the page is redrawn with a message explaining
+why, and nothing is deleted. Their vehicles have to go first.
+
+The button on the detail page asks for confirmation first, held in Alpine. It is a real submit inside a
+real form, so with JavaScript off the first click deletes — the page keeps working, it just loses the
+extra question.
+
+## Vehicles
+
+Vehicles are always reached through their customer, because a vehicle without one does not exist in
+this domain — the foreign key is `NOT NULL`.
+
+| Method | Path | Purpose | |
+| ------ | ---- | ------- | - |
+| `GET` | `/customers/:id/vehicles/new` | the create form | ✅ |
+| `POST` | `/customers/:id/vehicles` | create | ✅ |
+| `GET` | `/vehicles/:id/edit` | the edit form | ✅ |
+| `POST` | `/vehicles/:id` | update | ✅ |
+| `POST` | `/vehicles/:id/delete` | delete | ✅ |
+
+Creating is nested under the customer, since that is where the vehicle's owner comes from. Editing and
+deleting are not: a vehicle id is already unique, so repeating the customer in the path would allow
+`/customers/1/vehicles/2` where vehicle 2 belongs to customer 3 — a mismatch to validate rather than a
+URL to support. The owner is read from the vehicle instead.
+
+### `POST /customers/:id/vehicles`
+
+Creates a vehicle from `plate`, `make`, `model`, and `year`. All required. **303** to the customer's
+page on success, **422** with the form redrawn on a validation failure, **404** if the customer does
+not exist.
+
+`year` must be a number between 1900 and next year — next year because new models are sold before the
+year they are named for. The input is `type="number"`, but the server validates regardless: nothing
+stops a request arriving without a browser.
+
+### `GET /vehicles/:id/edit`
+
+The edit form, pre-filled. The customer's name is shown and links back, read from the vehicle rather
+than the URL. **404** for an unknown id.
+
+### `POST /vehicles/:id`
+
+Updates a vehicle. Same validation as creating one. **303** to the owner's page, **422** with the form
+redrawn, **404** for an unknown id.
+
+### `POST /vehicles/:id/delete`
+
+Deletes a vehicle, then **303** to the owner's page. Asks for confirmation first, in Alpine, the same
+way deleting a customer does.
+
+## Spare parts
+
+| Method | Path | Purpose | |
+| ------ | ---- | ------- | - |
+| `GET` | `/parts` | the catalogue | ✅ |
+| `GET` | `/parts/new` | the create form | ✅ |
+| `POST` | `/parts` | create | ✅ |
+| `GET` | `/parts/:id/edit` | the edit form | ✅ |
+| `POST` | `/parts/:id` | update | ✅ |
+| `POST` | `/parts/:id/delete` | delete | ✅ |
+
+### `GET /parts`
+
+The catalogue, by name. Prices are stored as millimes and shown as dinars — `42500` renders as
+`42.500 TND`. A part with nothing in stock is marked rather than showing a bare `0`, since that is the
+difference between "we can fit this today" and "we cannot".
+
+### `POST /parts` and `POST /parts/:id`
+
+Price is typed in dinars (`42.500`) and stored as millimes. More than three decimal places is
+rejected rather than rounded. `reference` is unique: a clash comes back as **422** with a message on
+that field, not a 500.
+
+## Errors
+
+| Response | When |
+| -------- | ---- |
+| `404` HTML page | unknown URL, unknown record, or a malformed id |
+| `409` HTML page | the action conflicts with the current state — deleting a customer who has vehicles |
+| `500` plain text | anything unexpected; the error is logged, never sent to the browser |
+
+The 404 page is rendered for unmatched routes too, so a mistyped URL and a missing record look the
+same to a visitor. The 500 is deliberately plain text rather than a rendered page: that path means
+something is already broken, and rendering a template could fail again.
 
 ## Conventions
 

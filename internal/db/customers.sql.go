@@ -34,6 +34,16 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 	return i, err
 }
 
+const deleteCustomer = `-- name: DeleteCustomer :exec
+DELETE FROM customers
+WHERE id = $1
+`
+
+func (q *Queries) DeleteCustomer(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteCustomer, id)
+	return err
+}
+
 const getCustomer = `-- name: GetCustomer :one
 SELECT id, name, phone, city, created_at FROM customers
 WHERE id = $1
@@ -54,11 +64,14 @@ func (q *Queries) GetCustomer(ctx context.Context, id int64) (Customer, error) {
 
 const listCustomers = `-- name: ListCustomers :many
 SELECT id, name, phone, city, created_at FROM customers
+WHERE $1::text = '' OR name ILIKE '%' || $1::text || '%'
 ORDER BY created_at DESC, id DESC
 `
 
-func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listCustomers)
+// An empty search returns everything, so one query serves both the full list and a
+// filtered one. ILIKE is case-insensitive.
+func (q *Queries) ListCustomers(ctx context.Context, search string) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listCustomers, search)
 	if err != nil {
 		return nil, err
 	}
@@ -81,4 +94,36 @@ func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCustomer = `-- name: UpdateCustomer :one
+UPDATE customers
+SET name = $2, phone = $3, city = $4
+WHERE id = $1
+RETURNING id, name, phone, city, created_at
+`
+
+type UpdateCustomerParams struct {
+	ID    int64
+	Name  string
+	Phone string
+	City  string
+}
+
+func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, updateCustomer,
+		arg.ID,
+		arg.Name,
+		arg.Phone,
+		arg.City,
+	)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.City,
+		&i.CreatedAt,
+	)
+	return i, err
 }

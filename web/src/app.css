@@ -1,14 +1,25 @@
 /* Tailwind CSS v4. Imported by app.js, so Vite compiles it into the bundle.
  *
- * v4 has no tailwind.config.js — configuration lives here in CSS. This import
- * pulls in the preflight reset, the utility classes, and the default theme.
- * Design tokens (brand colours, fonts, spacing) go in an `@theme { }` block when
- * the application needs them.
- *
- * @source is required because Tailwind scans for class names starting from this
- * Vite project, and the templates live outside it at the repository root. Without
- * this line the stylesheet compiles to almost nothing.
+ * v4 has no tailwind.config.js — configuration lives here in CSS. @source is
+ * required because Tailwind scans from this Vite project and the templates live
+ * outside it, at the repository root.
  */
 @import "tailwindcss";
 
 @source "../../views";
+
+/* Design tokens. Naming a colour "brand" rather than "blue" means a later change
+ * of mind is one line here instead of a find-and-replace across every template. */
+@theme {
+  --color-brand-50: oklch(0.97 0.014 254.6);
+  --color-brand-100: oklch(0.93 0.034 255.6);
+  --color-brand-500: oklch(0.62 0.19 259.8);
+  --color-brand-600: oklch(0.55 0.22 262.9);
+  --color-brand-700: oklch(0.49 0.2 264.4);
+}
+
+/* Alpine sets x-cloak on elements it has not initialised yet. Without this rule
+ * the attribute does nothing and half-built UI flashes on load. */
+[x-cloak] {
+  display: none !important;
+}

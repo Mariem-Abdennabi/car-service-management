@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"embed"
+	"flag"
 	"log"
 
 	"github.com/Mariem-Abdennabi/car-service-management/assets"
@@ -32,6 +33,9 @@ const (
 var migrations embed.FS
 
 func main() {
+	seed := flag.Bool("seed", false, "replace all data with demo data, then exit")
+	flag.Parse()
+
 	if err := config.LoadFile(".env"); err != nil {
 		log.Fatalf("configuration error: %v", err)
 	}
@@ -39,11 +43,6 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("configuration error: %v", err)
-	}
-
-	builtAssets, err := assets.Load(manifestPath, assetsPrefix)
-	if err != nil {
-		log.Fatalf("assets error: %v", err)
 	}
 
 	// Before the pool, so the schema is correct before anything queries it.
@@ -59,6 +58,28 @@ func main() {
 	// killed while ListenAndServe blocks. It matters for the paths that do return:
 	// a server that fails to bind its port closes the pool on the way out.
 	defer db.Close()
+
+	if *seed {
+		// Seeding deletes everything. The environment check is the only thing
+		// standing between a stray flag and a wiped production database.
+		if !cfg.IsDevelopment() {
+			log.Fatalf("refusing to seed in %s mode", cfg.Env)
+		}
+
+		if err := db.Seed(context.Background()); err != nil {
+			log.Fatalf("seed error: %v", err)
+		}
+
+		log.Println("seeded with demo data")
+
+		return
+	}
+
+	// After the seed branch, so seeding does not need the frontend built.
+	builtAssets, err := assets.Load(manifestPath, assetsPrefix)
+	if err != nil {
+		log.Fatalf("assets error: %v", err)
+	}
 
 	log.Printf("car-service-management: starting in %s mode", cfg.Env)
 

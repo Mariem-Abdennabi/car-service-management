@@ -94,9 +94,24 @@ string, a struct tag typo, a discarded result.
 - **Generated `*_templ.go` files are committed and never hand-edited.** `make templ` overwrites
   them, and it runs automatically before `run`, `build`, and `test`.
 - **A fragment is a component rendered without a layout around it.** That is the whole trick behind
-  HTMX here; nothing special is required.
+  htmx here; nothing special is required. One handler answers both, switching on the `HX-Request`
+  header, so an htmx interaction does not need its own route.
+- **A swapped element must carry its own target id.** With `hx-swap="outerHTML"` the response replaces
+  the element, so if the id does not come back the next interaction has nothing to target.
 - **All HTML goes through `render`** in `internal/server/render.go`, so `Content-Type` is set in one
   place.
+
+## Forms
+
+- **The view model holds strings**, whatever the column type. A rejected form redraws what was typed,
+  and what was typed may not parse.
+- **Validation returns the parsed value** along with the errors, so the caller never parses twice and
+  the two cannot drift apart.
+- **Trim before validating**, so a field of spaces counts as empty rather than being stored.
+- **Redraw on failure, redirect on success** — 422 with the values still in the form, 303 afterwards so
+  a refresh cannot submit twice.
+- **The browser input type is a convenience, not a check.** `type="number"` helps a person; the server
+  validates because a request need not come from a browser.
 
 ## HTMX and Alpine.js
 

@@ -41,6 +41,7 @@ Six modules, built in dependency order:
 
 | Document | What it covers |
 | -------- | -------------- |
+| [recap.md](docs/recap.md) | **Start here** — the stack, every file type, and why each choice was made |
 | [architecture.md](docs/architecture.md) | Layers, dependency direction, configuration, request lifecycle |
 | [api.md](docs/api.md) | Every URL the application answers |
 | [development-workflow.md](docs/development-workflow.md) | Daily loop, commands, definition of done, commit convention |

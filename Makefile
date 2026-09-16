@@ -17,6 +17,7 @@ help:
 	@echo "  make build    Compile the server to $(BINARY)"
 	@echo "  make templ    Regenerate Go code from .templ templates"
 	@echo "  make sqlc     Regenerate Go code from sql/queries"
+	@echo "  make seed     Replace all data with demo data (development only)"
 	@echo "  make migrate-up    Apply pending migrations (also runs on startup)"
 	@echo "  make migrate-down  Roll back the most recent migration"
 	@echo "  make assets   Build the Vite bundle into public/build"
@@ -40,12 +41,14 @@ templ:
 sqlc:
 	sqlc generate
 
-# Vite lives in web/, so its commands run there.
+# Vite lives in web/, so its commands run there. Calling the binary that
+# `bun install` put in node_modules runs exactly the version pinned in bun.lock —
+# `bun run build` goes through package.json to reach the same place.
 assets:
-	cd web && bun run build
+	cd web && ./node_modules/.bin/vite build
 
 watch:
-	cd web && bun run watch
+	cd web && ./node_modules/.bin/vite build --watch
 
 # The application runs pending migrations itself on startup, so these targets are
 # only for doing it deliberately — checking a new migration, or rolling one back.
@@ -60,6 +63,11 @@ migrate-down:
 
 run: templ
 	go run .
+
+# Destructive: replaces everything with demo data. Refuses to run outside
+# development, which is checked in main.
+seed:
+	go run . -seed
 
 # build depends on assets because the server refuses to start without the Vite
 # manifest — a binary with no stylesheet or JavaScript is not deployable.
@@ -88,4 +96,4 @@ tidy:
 clean:
 	rm -rf $(dir $(BINARY)) public/build
 
-.PHONY: help templ sqlc migrate-up migrate-down assets watch run build test vet fmt check tidy clean
+.PHONY: help templ sqlc seed migrate-up migrate-down assets watch run build test vet fmt check tidy clean

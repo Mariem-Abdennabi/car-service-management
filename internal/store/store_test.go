@@ -5,8 +5,6 @@ import (
 	"errors"
 	"os"
 	"testing"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // newTestStore connects to the database named by DATABASE_URL.
@@ -83,12 +81,12 @@ func TestCustomer(t *testing.T) {
 		}
 	})
 
-	t.Run("reports a missing row as pgx.ErrNoRows", func(t *testing.T) {
+	t.Run("reports a missing row as ErrNotFound", func(t *testing.T) {
 		_, err := s.Customer(context.Background(), -1)
-		// errors.Is looks through the fmt.Errorf wrapping, which is why the store
-		// wraps with %w. This is what lets a handler answer 404 instead of 500.
-		if !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("Customer() error = %v, want pgx.ErrNoRows", err)
+		// The store translates the driver's pgx.ErrNoRows into its own sentinel, so
+		// a handler can answer 404 without importing pgx.
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("Customer() error = %v, want ErrNotFound", err)
 		}
 	})
 }
@@ -97,15 +95,44 @@ func TestCustomers(t *testing.T) {
 	s := newTestStore(t)
 	created := createTestCustomer(t, s)
 
-	customers, err := s.Customers(context.Background())
-	if err != nil {
-		t.Fatalf("Customers() failed: %v", err)
+	contains := func(t *testing.T, customers []Customer, id int64) bool {
+		t.Helper()
+
+		for _, c := range customers {
+			if c.ID == id {
+				return true
+			}
+		}
+		return false
 	}
 
-	for _, c := range customers {
-		if c.ID == created.ID {
-			return
+	t.Run("an empty search returns everything", func(t *testing.T) {
+		customers, err := s.Customers(context.Background(), "")
+		if err != nil {
+			t.Fatalf("Customers() failed: %v", err)
 		}
-	}
-	t.Errorf("Customers() returned %d rows, none of them the one just created", len(customers))
+		if !contains(t, customers, created.ID) {
+			t.Errorf("returned %d rows, none of them the one just created", len(customers))
+		}
+	})
+
+	t.Run("a search filters case-insensitively", func(t *testing.T) {
+		customers, err := s.Customers(context.Background(), "test cust")
+		if err != nil {
+			t.Fatalf("Customers() failed: %v", err)
+		}
+		if !contains(t, customers, created.ID) {
+			t.Error("search did not find the customer by a lower-case fragment of its name")
+		}
+	})
+
+	t.Run("a search that matches nothing returns nothing", func(t *testing.T) {
+		customers, err := s.Customers(context.Background(), "zzzznobody")
+		if err != nil {
+			t.Fatalf("Customers() failed: %v", err)
+		}
+		if len(customers) != 0 {
+			t.Errorf("returned %d rows, want 0", len(customers))
+		}
+	})
 }

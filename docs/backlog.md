@@ -13,6 +13,22 @@ Each entry states the idea, why it might be worth it, and why it is not now.
 
 ## Deferred
 
+### Stock movements instead of a stored quantity
+`parts.quantity_on_hand` is a single number edited directly. Real inventory records *movements* —
+received 20, consumed 2 on job 41 — and derives the total, which gives you a history, an audit trail,
+and correct behaviour when two people adjust stock at the same moment.
+
+Deferred because nothing consumes parts yet. Revisit at Milestone 6, when a repair job takes parts out
+of stock: that is the point where "why is this number wrong?" becomes a real question. The `CHECK
+(quantity_on_hand >= 0)` constraint is already in place, so the database will refuse to go negative in
+the meantime.
+
+### Prices that change over time
+A part has one price. Invoicing a job from six months ago should use the price *then*, not now, which
+means either price history or copying the price onto the invoice line at the time. Deferred to
+Milestone 7, where invoices make the question concrete — copying onto the line is likely the simpler
+correct answer.
+
 ### A `seed` command for demo data
 A re-runnable command that fills the database with realistic demo rows, so the pages are worth
 looking at during development. It must be a **command-line action**, not a SQL file applied by hand.

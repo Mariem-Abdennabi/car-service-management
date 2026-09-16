@@ -15,3 +15,22 @@ type Customer struct {
 	City      string
 	CreatedAt time.Time
 }
+
+type Part struct {
+	ID             int64
+	Reference      string
+	Name           string
+	PriceMillimes  int32
+	QuantityOnHand int32
+	CreatedAt      time.Time
+}
+
+type Vehicle struct {
+	ID         int64
+	CustomerID int64
+	Plate      string
+	Make       string
+	Model      string
+	Year       int32
+	CreatedAt  time.Time
+}

@@ -120,7 +120,8 @@ golang-migrate tracks progress in a `schema_migrations` table it manages itself.
 - **Files**: lowercase with underscores where needed — `home.go`, `server.go`. Tests sit beside
   their subject as `server_test.go`.
 - **Database**: `snake_case`, plural table names (`customers`, `service_jobs`), `id` primary keys,
-  `<table_singular>_id` foreign keys (`customer_id`), `created_at` / `updated_at` timestamps.
+  `<table_singular>_id` foreign keys (`customer_id`), `created_at` / `updated_at` timestamps. Index
+  every foreign key explicitly — PostgreSQL does it for primary keys, not for foreign keys.
 - **Go identifiers**: `MixedCaps`, never `snake_case`. Exported only when something outside the
   package needs it — start unexported and promote when required.
 - **Avoid stutter**: `store.Customer`, not `store.StoreCustomer`.

@@ -1,0 +1,128 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/Mariem-Abdennabi/car-service-management/assets"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
+)
+
+// Parts is the spare parts catalogue.
+templ Parts(a assets.Assets, parts []store.Part) {
+	@Layout("Spare parts", NavParts, a) {
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-semibold tracking-tight">Spare parts</h1>
+			<a
+				href="/parts/new"
+				class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+			>
+				New part
+			</a>
+		</div>
+		if len(parts) == 0 {
+			<p class="mt-6 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+				No parts in the catalogue yet.
+			</p>
+		} else {
+			<div class="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+				<table class="w-full text-left text-sm">
+					<thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+						<tr>
+							<th class="px-4 py-3 font-medium">Reference</th>
+							<th class="px-4 py-3 font-medium">Name</th>
+							<th class="px-4 py-3 text-right font-medium">Price</th>
+							<th class="px-4 py-3 text-right font-medium">In stock</th>
+							<th class="px-4 py-3"><span class="sr-only">Actions</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, part := range parts {
+							<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+								<td class="px-4 py-3 font-medium text-slate-900">{ part.Reference }</td>
+								<td class="px-4 py-3 text-slate-600">{ part.Name }</td>
+								<td class="px-4 py-3 text-right text-slate-600">{ Millimes(part.PriceMillimes) }</td>
+								<td class="px-4 py-3 text-right">
+									// Nothing in stock is worth noticing at a glance: it is the
+									// difference between "we can fit this today" and "we cannot".
+									if part.QuantityOnHand == 0 {
+										<span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+											Out of stock
+										</span>
+									} else {
+										{ strconv.Itoa(int(part.QuantityOnHand)) }
+									}
+								</td>
+								<td class="px-4 py-3">
+									<div class="flex items-center justify-end gap-3">
+										<a
+											href={ fmt.Sprintf("/parts/%d/edit", part.ID) }
+											class="text-sm text-slate-600 hover:underline"
+										>
+											Edit
+										</a>
+										<form
+											method="post"
+											action={ fmt.Sprintf("/parts/%d/delete", part.ID) }
+											class="flex items-center gap-2"
+											x-data="{ confirming: false }"
+											x-on:submit="if (!confirming) { $event.preventDefault(); confirming = true }"
+										>
+											<button
+												type="submit"
+												class="text-sm text-red-700 hover:underline"
+												x-text="confirming ? 'Yes, delete' : 'Delete'"
+											>
+												Delete
+											</button>
+											<button
+												type="button"
+												x-show="confirming"
+												x-on:click="confirming = false"
+												class="text-sm text-slate-500 hover:underline"
+											>
+												Cancel
+											</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+// PartNew is the create form, and what a rejected submission renders.
+templ PartNew(a assets.Assets, form PartForm) {
+	@Layout("New part", NavParts, a) {
+		@partFields("New part", "/parts", "Save part", form)
+	}
+}
+
+// PartEdit is the same form with the part's current details in it.
+templ PartEdit(a assets.Assets, part store.Part, form PartForm) {
+	@Layout("Edit "+part.Reference, NavParts, a) {
+		@partFields("Edit part", fmt.Sprintf("/parts/%d", part.ID), "Save changes", form)
+	}
+}
+
+// partFields is the markup both forms share.
+templ partFields(heading, action, submit string, form PartForm) {
+	<a href="/parts" class="text-sm text-slate-500 hover:underline">← Spare parts</a>
+	<h1 class="mt-3 text-2xl font-semibold tracking-tight">{ heading }</h1>
+	<form method="post" action={ action } class="mt-6 max-w-md space-y-4">
+		@field("Reference", "reference", "text", form.Reference, form.Errors["reference"])
+		@field("Name", "name", "text", form.Name, form.Errors["name"])
+		@field("Price (TND)", "price", "text", form.Price, form.Errors["price"])
+		@field("Quantity in stock", "quantity", "number", form.Quantity, form.Errors["quantity"])
+		<button
+			type="submit"
+			class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+		>
+			{ submit }
+		</button>
+	</form>
+}

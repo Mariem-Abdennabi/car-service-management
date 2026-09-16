@@ -1,0 +1,49 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/Mariem-Abdennabi/car-service-management/assets"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
+)
+
+// VehicleNew is the form for adding a vehicle to a customer.
+templ VehicleNew(a assets.Assets, customer store.Customer, form VehicleForm) {
+	@Layout("New vehicle", NavCustomers, a) {
+		@vehicleFields(customer, "New vehicle", fmt.Sprintf("/customers/%d/vehicles", customer.ID), "Save vehicle", form)
+	}
+}
+
+// VehicleEdit is the same form with the vehicle's current details in it.
+templ VehicleEdit(a assets.Assets, customer store.Customer, vehicle store.Vehicle, form VehicleForm) {
+	@Layout("Edit "+vehicle.Plate, NavCustomers, a) {
+		@vehicleFields(customer, "Edit vehicle", fmt.Sprintf("/vehicles/%d", vehicle.ID), "Save changes", form)
+	}
+}
+
+// vehicleFields is the markup both forms share.
+templ vehicleFields(customer store.Customer, heading, action, submit string, form VehicleForm) {
+	<a
+		href={ fmt.Sprintf("/customers/%d", customer.ID) }
+		class="text-sm text-slate-500 hover:underline"
+	>
+		← { customer.Name }
+	</a>
+	<h1 class="mt-3 text-2xl font-semibold tracking-tight">{ heading }</h1>
+	<form
+		method="post"
+		action={ action }
+		class="mt-6 max-w-md space-y-4"
+	>
+			@field("Plate", "plate", "text", form.Plate, form.Errors["plate"])
+			@field("Make", "make", "text", form.Make, form.Errors["make"])
+			@field("Model", "model", "text", form.Model, form.Errors["model"])
+			@field("Year", "year", "number", form.Year, form.Errors["year"])
+		<button
+			type="submit"
+			class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+		>
+			{ submit }
+		</button>
+	</form>
+}

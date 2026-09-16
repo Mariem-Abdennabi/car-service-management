@@ -1,0 +1,296 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/Mariem-Abdennabi/car-service-management/assets"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
+)
+
+// Customers is the customer list page.
+templ Customers(a assets.Assets, customers []store.Customer, search string) {
+	@Layout("Customers", NavCustomers, a) {
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-semibold tracking-tight">Customers</h1>
+			<a
+				href="/customers/new"
+				class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+			>
+				New customer
+			</a>
+		</div>
+		// htmx sends a GET to /customers as you type and swaps the response over
+		// #customer-list, leaving the rest of the page — and the cursor — alone.
+		//
+		// The input has a name, so htmx sends its value as ?q=. `delay:300ms`
+		// debounces, so a request goes out once typing pauses rather than per
+		// keystroke. hx-push-url keeps the address bar in step, which makes a search
+		// shareable and the back button work.
+		<input
+			type="search"
+			name="q"
+			value={ search }
+			placeholder="Search by name"
+			hx-get="/customers"
+			hx-target="#customer-list"
+			hx-swap="outerHTML"
+			hx-trigger="input changed delay:300ms, search"
+			hx-push-url="true"
+			class="mt-6 w-full max-w-sm rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+		/>
+		@CustomerList(customers)
+	}
+}
+
+// CustomerList is the table on its own, so it can be rendered either inside the
+// page or by itself as the htmx response. Exported for that second use.
+//
+// The id is what htmx replaces, and it is on the outermost element because the
+// swap is outerHTML — the response has to bring the id back with it or the next
+// search would have nothing to target.
+templ CustomerList(customers []store.Customer) {
+	<div id="customer-list" class="mt-6">
+		if len(customers) == 0 {
+			<p class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+				No customers found.
+			</p>
+		} else {
+			<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+				<table class="w-full text-left text-sm">
+					<thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+						<tr>
+							<th class="px-4 py-3 font-medium">Name</th>
+							<th class="px-4 py-3 font-medium">Phone</th>
+							<th class="px-4 py-3 font-medium">City</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, customer := range customers {
+							<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+								<td class="px-4 py-3">
+									<a
+										href={ fmt.Sprintf("/customers/%d", customer.ID) }
+										class="font-medium text-slate-900 hover:underline"
+									>
+										{ customer.Name }
+									</a>
+								</td>
+								<td class="px-4 py-3 text-slate-600">{ customer.Phone }</td>
+								<td class="px-4 py-3 text-slate-600">{ customer.City }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+// CustomerDetail is one customer's page. Named CustomerDetail so it does not read
+// as the store type of the same name.
+templ CustomerDetail(a assets.Assets, customer store.Customer, vehicles []store.Vehicle, notice string) {
+	@Layout(customer.Name, NavCustomers, a) {
+		if notice != "" {
+			<p class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+				{ notice }
+			</p>
+		}
+		<a href="/customers" class="text-sm text-slate-500 hover:underline">← Customers</a>
+		<h1 class="mt-3 text-2xl font-semibold tracking-tight">{ customer.Name }</h1>
+		<dl class="mt-6 max-w-md divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white text-sm">
+			<div class="flex justify-between px-4 py-3">
+				<dt class="text-slate-500">Phone</dt>
+				<dd class="text-slate-900">{ customer.Phone }</dd>
+			</div>
+			<div class="flex justify-between px-4 py-3">
+				<dt class="text-slate-500">City</dt>
+				<dd class="text-slate-900">{ customer.City }</dd>
+			</div>
+			<div class="flex justify-between px-4 py-3">
+				<dt class="text-slate-500">Customer since</dt>
+				<dd class="text-slate-900">{ customer.CreatedAt.Format("2 January 2006") }</dd>
+			</div>
+		</dl>
+		<div class="mt-6 flex items-center gap-3">
+			<a
+				href={ fmt.Sprintf("/customers/%d/edit", customer.ID) }
+				class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+			>
+				Edit
+			</a>
+			// Alpine holds one boolean: has the visitor confirmed yet? The first
+			// submit is cancelled and turns the button into a confirmation; the second
+			// goes through. No request until the visitor commits, which is exactly the
+			// kind of state that has no business on the server.
+			//
+			// The button is a real submit inside a real form, so with JavaScript off
+			// the first click simply deletes — the page keeps working, it just loses
+			// the extra question. x-on: rather than Alpine's @ shorthand, because @ is
+			// templ's own syntax for rendering a component.
+			<form
+				method="post"
+				action={ fmt.Sprintf("/customers/%d/delete", customer.ID) }
+				class="flex items-center gap-3"
+				x-data="{ confirming: false }"
+				x-on:submit="if (!confirming) { $event.preventDefault(); confirming = true }"
+			>
+				<button
+					type="submit"
+					class="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+					x-text="confirming ? 'Yes, delete' : 'Delete'"
+				>
+					Delete
+				</button>
+				<button
+					type="button"
+					x-show="confirming"
+					x-on:click="confirming = false"
+					class="text-sm text-slate-500 hover:underline"
+				>
+					Cancel
+				</button>
+			</form>
+		</div>
+		@vehicleList(customer, vehicles)
+	}
+}
+
+// vehicleList is the customer's vehicles, on their page. Unexported: nothing
+// outside this package renders it on its own yet.
+templ vehicleList(customer store.Customer, vehicles []store.Vehicle) {
+	<div class="mt-10 flex items-center justify-between">
+		<h2 class="text-lg font-semibold tracking-tight">Vehicles</h2>
+		<a
+			href={ fmt.Sprintf("/customers/%d/vehicles/new", customer.ID) }
+			class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+		>
+			Add vehicle
+		</a>
+	</div>
+	if len(vehicles) == 0 {
+		<p class="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+			No vehicles for this customer yet.
+		</p>
+	} else {
+		<div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+			<table class="w-full text-left text-sm">
+				<thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+					<tr>
+						<th class="px-4 py-3 font-medium">Plate</th>
+						<th class="px-4 py-3 font-medium">Make</th>
+						<th class="px-4 py-3 font-medium">Model</th>
+						<th class="px-4 py-3 font-medium">Year</th>
+						<th class="px-4 py-3"><span class="sr-only">Actions</span></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, vehicle := range vehicles {
+						<tr class="border-b border-slate-100 last:border-0">
+							<td class="px-4 py-3 font-medium text-slate-900">{ vehicle.Plate }</td>
+							<td class="px-4 py-3 text-slate-600">{ vehicle.Make }</td>
+							<td class="px-4 py-3 text-slate-600">{ vehicle.Model }</td>
+							<td class="px-4 py-3 text-slate-600">{ strconv.Itoa(int(vehicle.Year)) }</td>
+							<td class="px-4 py-3">
+								<div class="flex items-center justify-end gap-3">
+									<a
+										href={ fmt.Sprintf("/vehicles/%d/edit", vehicle.ID) }
+										class="text-sm text-slate-600 hover:underline"
+									>
+										Edit
+									</a>
+									// The same confirm-on-first-submit as deleting a customer, so
+									// the two destructive actions behave alike.
+									<form
+										method="post"
+										action={ fmt.Sprintf("/vehicles/%d/delete", vehicle.ID) }
+										class="flex items-center gap-2"
+										x-data="{ confirming: false }"
+										x-on:submit="if (!confirming) { $event.preventDefault(); confirming = true }"
+									>
+										<button
+											type="submit"
+											class="text-sm text-red-700 hover:underline"
+											x-text="confirming ? 'Yes, delete' : 'Delete'"
+										>
+											Delete
+										</button>
+										<button
+											type="button"
+											x-show="confirming"
+											x-on:click="confirming = false"
+											class="text-sm text-slate-500 hover:underline"
+										>
+											Cancel
+										</button>
+									</form>
+								</div>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// NotFound is the 404 page.
+templ NotFound(a assets.Assets) {
+	@Layout("Not found", "", a) {
+		<h1 class="text-2xl font-semibold tracking-tight">Not found</h1>
+		<p class="mt-3 text-slate-600">That page does not exist.</p>
+		<a href="/" class="mt-6 inline-block text-sm text-slate-500 hover:underline">← Home</a>
+	}
+}
+
+// CustomerNew is the create form, and what a rejected submission renders.
+templ CustomerNew(a assets.Assets, form CustomerForm) {
+	@Layout("New customer", NavCustomers, a) {
+		@customerFields("New customer", "/customers", "Save customer", form)
+	}
+}
+
+// CustomerEdit is the same form with the customer's current details in it.
+templ CustomerEdit(a assets.Assets, customer store.Customer, form CustomerForm) {
+	@Layout("Edit "+customer.Name, NavCustomers, a) {
+		@customerFields("Edit customer", fmt.Sprintf("/customers/%d", customer.ID), "Save changes", form)
+	}
+}
+
+// customerFields is the markup both forms share. Reused rather than copied, so a
+// change to the fields cannot apply to one form and not the other.
+templ customerFields(heading, action, submit string, form CustomerForm) {
+	<a href="/customers" class="text-sm text-slate-500 hover:underline">← Customers</a>
+	<h1 class="mt-3 text-2xl font-semibold tracking-tight">{ heading }</h1>
+	<form method="post" action={ action } class="mt-6 max-w-md space-y-4">
+		@field("Name", "name", "text", form.Name, form.Errors["name"])
+		@field("Phone", "phone", "text", form.Phone, form.Errors["phone"])
+		@field("City", "city", "text", form.City, form.Errors["city"])
+		<button
+			type="submit"
+			class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+		>
+			{ submit }
+		</button>
+	</form>
+}
+
+// field is one labelled input, with its error underneath when it has one. kind is
+// the HTML input type — "number" makes phones show a numeric keypad and desktop
+// browsers reject letters, but the server validates regardless, since nothing
+// stops a request arriving without a browser.
+templ field(label, name, kind, value, err string) {
+	<div>
+		<label for={ name } class="block text-sm font-medium text-slate-700">{ label }</label>
+		<input
+			id={ name }
+			type={ kind }
+			name={ name }
+			value={ value }
+			class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+		/>
+		if err != "" {
+			<p class="mt-1 text-sm text-red-600">{ err }</p>
+		}
+	</div>
+}

@@ -20,8 +20,7 @@ import (
 // a socket, and the asset URLs are fixed rather than read from a real Vite
 // manifest — the point is that the layout renders whatever it is given.
 //
-// db may be nil: the pages below do not touch the database, so only the health
-// check needs a real one.
+// db may be nil for a page that does not read the database. Most now do.
 func newTestServer(db *store.Store) *Server {
 	return New(
 		config.Config{Env: "production", Port: 8080},
@@ -69,8 +68,12 @@ func TestHandleHealth(t *testing.T) {
 	}
 }
 
+// The dashboard counts rows, so it needs a real database now.
 func TestHandleHome(t *testing.T) {
-	got := do(t, nil, http.MethodGet, "/")
+	db := newCustomerTestStore(t)
+	customer := newCustomer(t, db)
+
+	got := do(t, db, http.MethodGet, "/")
 
 	if got.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", got.Code, http.StatusOK)
@@ -91,7 +94,10 @@ func TestHandleHome(t *testing.T) {
 		"<title>Home · Car Service</title>",
 		`<link rel="stylesheet" href="/build/app.css">`,
 		`<script type="module" src="/build/app.js">`,
-		"Car Service &amp; Spare Parts Management",
+		"Workshop overview",
+		// The dashboard shows real counts and the most recent customers.
+		"Recent customers",
+		customer.Name,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -100,7 +106,7 @@ func TestHandleHome(t *testing.T) {
 }
 
 func TestUnknownRouteIsNotFound(t *testing.T) {
-	got := do(t, nil, http.MethodGet, "/no-such-page")
+	got := do(t, newCustomerTestStore(t), http.MethodGet, "/no-such-page")
 
 	if got.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", got.Code, http.StatusNotFound)
