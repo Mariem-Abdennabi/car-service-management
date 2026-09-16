@@ -89,7 +89,7 @@ templ CustomerList(customers []store.Customer) {
 
 // CustomerDetail is one customer's page. Named CustomerDetail so it does not read
 // as the store type of the same name.
-templ CustomerDetail(a assets.Assets, customer store.Customer, vehicles []store.Vehicle, notice string) {
+templ CustomerDetail(a assets.Assets, customer store.Customer, vehicles []store.Vehicle, jobs []store.CustomerJob, notice string) {
 	@Layout(customer.Name, NavCustomers, a) {
 		if notice != "" {
 			<p class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -153,6 +153,7 @@ templ CustomerDetail(a assets.Assets, customer store.Customer, vehicles []store.
 			</form>
 		</div>
 		@vehicleList(customer, vehicles)
+		@jobList(jobs)
 	}
 }
 

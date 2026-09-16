@@ -1,0 +1,162 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/Mariem-Abdennabi/car-service-management/assets"
+	"github.com/Mariem-Abdennabi/car-service-management/internal/store"
+)
+
+// Jobs is the list of every service job.
+templ Jobs(a assets.Assets, jobs []store.JobListing) {
+	@Layout("Service jobs", NavJobs, a) {
+		@PageHeader("Service jobs") {
+			<span class="text-sm text-slate-500">
+				{ fmt.Sprintf("%d in total", len(jobs)) }
+			</span>
+		}
+		if len(jobs) == 0 {
+			@EmptyState("No service jobs yet.", "A job is opened from the vehicle it is for.")
+		} else {
+			<div class="mt-6">
+				@Card() {
+					<table class="w-full text-left text-sm">
+						<thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+							<tr>
+								<th class="px-4 py-3 font-medium">Opened</th>
+								<th class="px-4 py-3 font-medium">Vehicle</th>
+								<th class="px-4 py-3 font-medium">Customer</th>
+								<th class="px-4 py-3 font-medium">Work</th>
+								<th class="px-4 py-3 font-medium">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, job := range jobs {
+								<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+									<td class="px-4 py-3 whitespace-nowrap text-slate-500">
+										{ job.OpenedAt.Format("2 Jan 2006") }
+									</td>
+									<td class="px-4 py-3">
+										<a
+											href={ fmt.Sprintf("/jobs/%d", job.ID) }
+											class="font-medium text-slate-900 hover:underline"
+										>
+											{ job.Plate }
+										</a>
+										<span class="block text-xs text-slate-500">
+											{ job.Make } { job.Model }
+										</span>
+									</td>
+									<td class="px-4 py-3">
+										<a
+											href={ fmt.Sprintf("/customers/%d", job.CustomerID) }
+											class="text-slate-600 hover:underline"
+										>
+											{ job.CustomerName }
+										</a>
+									</td>
+									<td class="px-4 py-3 text-slate-600">{ job.Description }</td>
+									<td class="px-4 py-3">
+										@statusBadge(job.Status)
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+			</div>
+		}
+	}
+}
+
+// JobDetail is one job's page.
+templ JobDetail(a assets.Assets, job store.Job, vehicle store.Vehicle, customer store.Customer) {
+	@Layout(vehicle.Plate+" · Job", NavJobs, a) {
+		@BackLink("/jobs", "Service jobs")
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<h1 class="text-2xl font-semibold tracking-tight">
+				{ vehicle.Make } { vehicle.Model }
+			</h1>
+			@statusBadge(job.Status)
+		</div>
+		<p class="mt-1 text-sm text-slate-500">
+			{ vehicle.Plate } ·
+			<a href={ fmt.Sprintf("/customers/%d", customer.ID) } class="hover:underline">
+				{ customer.Name }
+			</a>
+		</p>
+		<div class="mt-6 max-w-2xl">
+			@Card() {
+				<dl class="divide-y divide-slate-100 text-sm">
+					<div class="px-4 py-3">
+						<dt class="text-slate-500">Reported</dt>
+						<dd class="mt-1 text-slate-900">{ job.Description }</dd>
+					</div>
+					<div class="flex justify-between px-4 py-3">
+						<dt class="text-slate-500">Opened</dt>
+						<dd class="text-slate-900">{ job.OpenedAt.Format("2 January 2006") }</dd>
+					</div>
+					<div class="flex justify-between px-4 py-3">
+						<dt class="text-slate-500">Labour</dt>
+						<dd class="text-slate-900">{ Millimes(job.LabourMillimes) }</dd>
+					</div>
+				</dl>
+			}
+		</div>
+		// Parts consumed and the job total arrive with step 6d, which is where the
+		// job starts taking things off the shelf.
+	}
+}
+
+// jobList is a customer's jobs, on their page. Unexported: nothing outside this
+// package renders it on its own.
+templ jobList(jobs []store.CustomerJob) {
+	<h2 class="mt-10 text-lg font-semibold tracking-tight">Service jobs</h2>
+	if len(jobs) == 0 {
+		<p class="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+			No service jobs for this customer yet.
+		</p>
+	} else {
+		<div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+			<table class="w-full text-left text-sm">
+				<thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+					<tr>
+						<th class="px-4 py-3 font-medium">Opened</th>
+						<th class="px-4 py-3 font-medium">Vehicle</th>
+						<th class="px-4 py-3 font-medium">Work</th>
+						<th class="px-4 py-3 font-medium">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, job := range jobs {
+						<tr class="border-b border-slate-100 last:border-0">
+							<td class="px-4 py-3 whitespace-nowrap text-slate-500">
+								{ job.OpenedAt.Format("2 Jan 2006") }
+							</td>
+							<td class="px-4 py-3">
+								<a
+									href={ fmt.Sprintf("/jobs/%d", job.ID) }
+									class="font-medium text-slate-900 hover:underline"
+								>
+									{ job.Plate }
+								</a>
+							</td>
+							<td class="px-4 py-3 text-slate-600">{ job.Description }</td>
+							<td class="px-4 py-3">
+								@statusBadge(job.Status)
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// statusBadge is where a job's status is drawn, so every page shows it the same
+// way. The colour is decoration: the word is always there too.
+templ statusBadge(status string) {
+	<span class={ "inline-block rounded-full px-2 py-1 text-xs font-medium whitespace-nowrap", jobStatusClasses(status) }>
+		{ JobStatusLabel(status) }
+	</span>
+}

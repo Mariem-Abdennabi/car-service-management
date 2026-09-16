@@ -56,6 +56,30 @@ type Vehicle = db.Vehicle
 // Part is a spare part in the workshop's catalogue.
 type Part = db.Part
 
+// Job is one repair, opened against a vehicle.
+type Job = db.ServiceJob
+
+// JobListing is a row of the job list: the job, the car, and whose it is. sqlc
+// names the struct after the query that returns it, and aliasing keeps that name
+// out of the rest of the application.
+type JobListing = db.ListJobsRow
+
+// CustomerJob is a row of the jobs shown on a customer's page — the same job with
+// only the plate alongside, since the page already says whose it is.
+type CustomerJob = db.ListJobsByCustomerRow
+
+// The statuses a job can hold. The database enforces the same four in a CHECK
+// constraint; these constants exist so the Go side never spells one wrong.
+//
+// Stored values are lower case with underscores because that is what reads well
+// in SQL. Turning them into something a person reads is the view's job.
+const (
+	JobReceived   = "received"
+	JobInProgress = "in_progress"
+	JobCompleted  = "completed"
+	JobCancelled  = "cancelled"
+)
+
 // Store holds the connection pool and the generated queries that use it.
 type Store struct {
 	pool    *pgxpool.Pool
@@ -228,9 +252,18 @@ func (s *Store) CreateVehicle(ctx context.Context, customerID int64, plate, make
 	return vehicle, nil
 }
 
-// DeleteVehicle removes a vehicle.
+// DeleteVehicle removes a vehicle, or returns ErrInUse when it has service jobs.
+//
+// Nothing referenced vehicles until service_jobs did, so this translation arrived
+// with that table: without it, deleting a car that has been worked on is a 500
+// rather than an explanation.
 func (s *Store) DeleteVehicle(ctx context.Context, id int64) error {
 	if err := s.queries.DeleteVehicle(ctx, id); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
+			return ErrInUse
+		}
+
 		return fmt.Errorf("delete vehicle %d: %w", id, err)
 	}
 
@@ -360,4 +393,68 @@ func (s *Store) RecentCustomers(ctx context.Context) ([]Customer, error) {
 	}
 
 	return customers, nil
+}
+
+// Jobs returns every job, newest first, with its vehicle and owner.
+func (s *Store) Jobs(ctx context.Context) ([]JobListing, error) {
+	jobs, err := s.queries.ListJobs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list jobs: %w", err)
+	}
+
+	return jobs, nil
+}
+
+// Job returns one job by id, or ErrNotFound if there is no such row.
+func (s *Store) Job(ctx context.Context, id int64) (Job, error) {
+	job, err := s.queries.GetJob(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Job{}, ErrNotFound
+	}
+	if err != nil {
+		return Job{}, fmt.Errorf("get job %d: %w", id, err)
+	}
+
+	return job, nil
+}
+
+// JobsByCustomer returns one customer's jobs across all of their vehicles.
+func (s *Store) JobsByCustomer(ctx context.Context, customerID int64) ([]CustomerJob, error) {
+	jobs, err := s.queries.ListJobsByCustomer(ctx, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("list jobs for customer %d: %w", customerID, err)
+	}
+
+	return jobs, nil
+}
+
+// CreateJob opens a job against a vehicle.
+//
+// status is a parameter rather than always JobReceived because the seeder needs a
+// mix of them; step 6b's form will pass JobReceived and nothing else.
+func (s *Store) CreateJob(ctx context.Context, vehicleID int64, description, status string, labourMillimes int32) (Job, error) {
+	job, err := s.queries.CreateJob(ctx, db.CreateJobParams{
+		VehicleID:      vehicleID,
+		Description:    description,
+		Status:         status,
+		LabourMillimes: labourMillimes,
+	})
+	if err != nil {
+		return Job{}, fmt.Errorf("create job: %w", err)
+	}
+
+	return job, nil
+}
+
+// DeleteJob removes a job.
+//
+// Nothing in the application routes to this: a job that is not happening is
+// cancelled, which keeps the history. It exists so tests and the seeder can clear
+// up after themselves.
+func (s *Store) DeleteJob(ctx context.Context, id int64) error {
+	if err := s.queries.DeleteJob(ctx, id); err != nil {
+		return fmt.Errorf("delete job %d: %w", id, err)
+	}
+
+	return nil
 }

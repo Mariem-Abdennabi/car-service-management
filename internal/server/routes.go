@@ -29,6 +29,12 @@ func (s *Server) registerRoutes() {
 	s.router.POST("/vehicles/:id", s.handleUpdateVehicle)
 	s.router.POST("/vehicles/:id/delete", s.handleDeleteVehicle)
 
+	// A job is read on its own unnested URL for the same reason a vehicle is: the
+	// id is unique, and nesting it under a customer would allow a URL where the two
+	// disagree. Opening one is nested under its vehicle — step 6b.
+	s.router.GET("/jobs", s.handleJobs)
+	s.router.GET("/jobs/:id", s.handleJob)
+
 	// Operational
 	s.router.GET("/parts", s.handleParts)
 	s.router.GET("/parts/new", s.handleNewPart)

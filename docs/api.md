@@ -26,11 +26,10 @@ root. Embedding the bundle in the binary is in [backlog.md](backlog.md).
 
 ### `GET /`
 
-The landing page. Renders `views.Home` inside `views.Layout`.
+The dashboard. Counts of customers, vehicles and parts in one query, the five most recent customers,
+and the parts that need restocking.
 
 **Response** `200 OK`, `text/html; charset=utf-8`.
-
-It becomes a real dashboard once there is data to summarise.
 
 ## Operational
 
@@ -180,6 +179,47 @@ redrawn, **404** for an unknown id.
 Deletes a vehicle, then **303** to the owner's page. Asks for confirmation first, in Alpine, the same
 way deleting a customer does.
 
+**409 Conflict** when the vehicle has service jobs: the owner's page is redrawn with a message, and
+nothing is deleted. The same refusal as deleting a customer who still has vehicles, one level further
+down — a car that has been worked on keeps its history.
+
+## Service jobs
+
+A job is one repair: opened against a vehicle, carrying what the customer reported, a status, and a
+labour charge. The customer is reached through the vehicle and never stored on the job.
+
+| Method | Path | Purpose | |
+| ------ | ---- | ------- | - |
+| `GET` | `/jobs` | every job, newest first | ✅ |
+| `GET` | `/jobs/:id` | detail | ✅ |
+| `GET` | `/vehicles/:id/jobs/new` · `POST /vehicles/:id/jobs` | open a job | 6b |
+| `POST` | `/jobs/:id` | description and labour | 6b |
+| `POST` | `/jobs/:id/status` | advance or cancel | 6c |
+| `POST` | `/jobs/:id/parts` | consume a part | 6d |
+
+Reading a job is unnested for the same reason editing a vehicle is: the id is unique, and putting the
+vehicle back in the path would allow a URL where the two disagree. Opening one will be nested under
+its vehicle, because that is where the job's subject comes from.
+
+There is deliberately **no delete route**. A job that is not happening is cancelled, which keeps the
+record; deleting one that had consumed parts would mean deciding whether the stock comes back.
+
+### `GET /jobs`
+
+Every job, newest first, each row showing the car and its owner. One query with two joins rather than
+a lookup per row.
+
+### `GET /jobs/:id`
+
+One job, with the vehicle and the owner reached by following the job — so the page cannot show one
+customer's name above another's car. **404** for an unknown id or an id that is not a number.
+
+Statuses are stored as `received`, `in_progress`, `completed`, `cancelled` and shown as "Received",
+"In progress", "Completed", "Cancelled". `views.JobStatusLabel` is the only place that mapping exists.
+The colour of the badge is decoration — the word is always there too.
+
+Parts consumed and the job total arrive at step 6d.
+
 ## Spare parts
 
 | Method | Path | Purpose | |
@@ -208,7 +248,7 @@ that field, not a 500.
 | Response | When |
 | -------- | ---- |
 | `404` HTML page | unknown URL, unknown record, or a malformed id |
-| `409` HTML page | the action conflicts with the current state — deleting a customer who has vehicles |
+| `409` HTML page | the action conflicts with the current state — deleting a customer who has vehicles, or a vehicle that has jobs |
 | `500` plain text | anything unexpected; the error is logged, never sent to the browser |
 
 The 404 page is rendered for unmatched routes too, so a mistyped URL and a missing record look the

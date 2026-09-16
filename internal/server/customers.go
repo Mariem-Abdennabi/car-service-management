@@ -37,21 +37,14 @@ func (s *Server) handleCustomers(c *gin.Context) {
 	render(c, http.StatusOK, views.Customers(s.assets, customers, search))
 }
 
-// handleCustomer shows one customer and their vehicles.
+// handleCustomer shows one customer, their vehicles, and their service jobs.
 func (s *Server) handleCustomer(c *gin.Context) {
 	customer, ok := s.customerFromPath(c)
 	if !ok {
 		return
 	}
 
-	vehicles, err := s.store.VehiclesByCustomer(c.Request.Context(), customer.ID)
-	if err != nil {
-		serverError(c, err)
-
-		return
-	}
-
-	render(c, http.StatusOK, views.CustomerDetail(s.assets, customer, vehicles, ""))
+	s.renderCustomer(c, http.StatusOK, customer, "")
 }
 
 // handleNewCustomer shows the empty create form.
@@ -220,12 +213,30 @@ func (s *Server) customerFromPath(c *gin.Context) (store.Customer, bool) {
 // renderCustomerWithNotice redraws the detail page with a message, using 409 to say
 // the request was understood but conflicts with the current state.
 func (s *Server) renderCustomerWithNotice(c *gin.Context, customer store.Customer, notice string) {
-	vehicles, err := s.store.VehiclesByCustomer(c.Request.Context(), customer.ID)
+	s.renderCustomer(c, http.StatusConflict, customer, notice)
+}
+
+// renderCustomer draws the detail page, gathering everything it shows.
+//
+// One function rather than two nearly identical ones: the page grew a second list
+// at step 6a, and the version with a notice would otherwise have quietly kept
+// showing only the first.
+func (s *Server) renderCustomer(c *gin.Context, status int, customer store.Customer, notice string) {
+	ctx := c.Request.Context()
+
+	vehicles, err := s.store.VehiclesByCustomer(ctx, customer.ID)
 	if err != nil {
 		serverError(c, err)
 
 		return
 	}
 
-	render(c, http.StatusConflict, views.CustomerDetail(s.assets, customer, vehicles, notice))
+	jobs, err := s.store.JobsByCustomer(ctx, customer.ID)
+	if err != nil {
+		serverError(c, err)
+
+		return
+	}
+
+	render(c, status, views.CustomerDetail(s.assets, customer, vehicles, jobs, notice))
 }

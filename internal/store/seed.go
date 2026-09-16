@@ -18,6 +18,15 @@ type demoVehicle struct {
 	make  string
 	model string
 	year  int32
+	jobs  []demoJob
+}
+
+// demoJob is one repair on that vehicle. Statuses are mixed on purpose, so the
+// job list shows every badge rather than four rows of the same one.
+type demoJob struct {
+	description string
+	status      string
+	labour      int32
 }
 
 type demoPart struct {
@@ -35,7 +44,7 @@ type demoPart struct {
 func (s *Store) Seed(ctx context.Context) error {
 	// One statement: CASCADE handles the foreign key from vehicles, and RESTART
 	// IDENTITY resets the id counters so seeded ids are the same every time.
-	if _, err := s.pool.Exec(ctx, `TRUNCATE customers, vehicles, parts RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := s.pool.Exec(ctx, `TRUNCATE customers, vehicles, parts, service_jobs RESTART IDENTITY CASCADE`); err != nil {
 		return fmt.Errorf("clear existing data: %w", err)
 	}
 
@@ -46,8 +55,15 @@ func (s *Store) Seed(ctx context.Context) error {
 		}
 
 		for _, v := range c.vehicles {
-			if _, err := s.CreateVehicle(ctx, customer.ID, v.plate, v.make, v.model, v.year); err != nil {
+			vehicle, err := s.CreateVehicle(ctx, customer.ID, v.plate, v.make, v.model, v.year)
+			if err != nil {
 				return fmt.Errorf("seed vehicle %s: %w", v.plate, err)
+			}
+
+			for _, j := range v.jobs {
+				if _, err := s.CreateJob(ctx, vehicle.ID, j.description, j.status, j.labour); err != nil {
+					return fmt.Errorf("seed job for %s: %w", v.plate, err)
+				}
 			}
 		}
 	}
@@ -65,32 +81,47 @@ var demoCustomers = []demoCustomer{
 	{
 		name: "Mohamed Ben Salah", phone: "+216 20 145 872", city: "Tunis",
 		vehicles: []demoVehicle{
-			{"123 TUN 4567", "Renault", "Clio", 2019},
-			{"98 TUN 1204", "Peugeot", "Partner", 2016},
+			{"123 TUN 4567", "Renault", "Clio", 2019, []demoJob{
+				{"Grinding noise from the front when braking", JobInProgress, 45000},
+				{"Annual service and oil change", JobCompleted, 60000},
+			}},
+			{"98 TUN 1204", "Peugeot", "Partner", 2016, []demoJob{
+				{"Clutch slipping on hills", JobReceived, 0},
+			}},
 		},
 	},
 	{
 		name: "Amira Trabelsi", phone: "+216 55 903 214", city: "Sfax",
-		vehicles: []demoVehicle{{"204 TUN 8891", "Volkswagen", "Golf", 2021}},
+		vehicles: []demoVehicle{{"204 TUN 8891", "Volkswagen", "Golf", 2021, []demoJob{
+			{"Air conditioning blows warm", JobInProgress, 35000},
+		}}},
 	},
 	{
 		name: "Youssef Gharbi", phone: "+216 98 476 130", city: "Sousse",
 		vehicles: []demoVehicle{
-			{"77 TUN 3345", "Dacia", "Logan", 2018},
-			{"310 TUN 5520", "Citroën", "C3", 2022},
+			{"77 TUN 3345", "Dacia", "Logan", 2018, []demoJob{
+				{"Replace front brake pads and discs", JobCompleted, 80000},
+				{"Customer changed their mind about the body work", JobCancelled, 0},
+			}},
+			{"310 TUN 5520", "Citroën", "C3", 2022, nil},
 		},
 	},
 	{
 		name: "Salma Bouazizi", phone: "+216 22 318 605", city: "Ariana",
-		vehicles: []demoVehicle{{"441 TUN 7712", "Hyundai", "i10", 2020}},
+		vehicles: []demoVehicle{{"441 TUN 7712", "Hyundai", "i10", 2020, []demoJob{
+			{"Warning light on the dashboard, needs diagnostics", JobReceived, 0},
+		}}},
 	},
 	{
 		name: "Karim Jebali", phone: "+216 71 260 449", city: "Bizerte",
-		vehicles: []demoVehicle{{"158 TUN 9034", "Fiat", "Panda", 2015}},
+		vehicles: []demoVehicle{{"158 TUN 9034", "Fiat", "Panda", 2015, []demoJob{
+			{"Timing belt replacement at 120,000 km", JobInProgress, 120000},
+		}}},
 	},
 	{
 		name: "Nadia Mansouri", phone: "+216 24 771 508", city: "Nabeul",
-		vehicles: []demoVehicle{{"502 TUN 1187", "Toyota", "Yaris", 2023}},
+		// No job: a car with no service history yet is worth seeing too.
+		vehicles: []demoVehicle{{"502 TUN 1187", "Toyota", "Yaris", 2023, nil}},
 	},
 	{
 		name: "Hichem Aouadi", phone: "+216 53 640 219", city: "Monastir",
@@ -98,7 +129,9 @@ var demoCustomers = []demoCustomer{
 	},
 	{
 		name: "Leila Chaabane", phone: "+216 29 405 736", city: "Gabès",
-		vehicles: []demoVehicle{{"66 TUN 2298", "Seat", "Ibiza", 2017}},
+		vehicles: []demoVehicle{{"66 TUN 2298", "Seat", "Ibiza", 2017, []demoJob{
+			{"Battery replaced, electrical check", JobCompleted, 25000},
+		}}},
 	},
 }
 

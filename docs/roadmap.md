@@ -14,11 +14,13 @@ Milestone 2 onward, **one new tool per step**, so each tool's contribution stays
 | --- | --- |
 | **Done** | Milestone 0 foundation · 1 frontend · 2 database · 3 customers · 4 vehicles |
 | **Done** | Milestone 5 — Spare parts (full CRUD) |
-| **Current** | Design pass and the dashboard · done. Next: `make seed`, awaiting approval |
+| **Done** | Design pass and the dashboard · `make seed` demo data |
+| **Current** | Milestone 6 — Service jobs · 6a done, 6b next |
 
-The application runs end to end: `make run`, then `http://localhost:8080`. Customers can be listed,
-searched, created, edited, and deleted, against PostgreSQL, with the Vite bundle served from
-`public/build`.
+The application runs end to end: `make run`, then `http://localhost:8080`. Customers, vehicles, and
+parts can each be listed, created, edited, and deleted against PostgreSQL, the customer list is
+searchable, and `make seed` fills the database with demo data worth looking at. The Vite bundle is
+served from `public/build`.
 
 ### Frontend build
 
@@ -131,8 +133,8 @@ generation error rather than a runtime one:
 sql/queries/customers.sql:7:7: column "customer_id" does not exist
 ```
 
-Demo data still has no seeder — recorded in [backlog.md](backlog.md) as a command-line action, since a
-single table is quicker to insert by hand than to build a seeder for.
+Demo data had no seeder at this point — one table was quicker to insert by hand than to build a seeder
+for. It arrived at step 5d, once there were three tables to fill.
 
 **Migrations are append-only.** Once `000001` has run anywhere, it is never edited; a change means a
 new numbered pair. Editing an applied migration means the schema in the database and the schema in the
@@ -208,6 +210,7 @@ A parts catalogue with quantity on hand, so parts can later be consumed by a rep
 | 5a | `parts` table, catalogue list with prices and an out-of-stock marker | ✅ |
 | 5b | Create a part, with the price typed in dinars and stored exactly as millimes, and a unique `reference` | ✅ |
 | 5c | Edit and delete | ✅ |
+| 5d | `make seed` — demo data for all three tables, as a flag on the existing binary | ✅ |
 
 **Money is a whole number of millimes, never a float.** `0.1 + 0.2` is not `0.3` in binary floating
 point, and prices get added up — a rounding error that is invisible on one part becomes a wrong invoice
@@ -229,13 +232,159 @@ store translates it to `store.ErrDuplicate` and the form points at the reference
 **Quantity is a plain number for now.** Real inventory records movements and derives the total.
 Deferred to [backlog.md](backlog.md) with the trigger: Milestone 6, when jobs start consuming stock.
 
-## Milestone 6 — Service jobs ⬜
+**The seeder is a flag, not a second program.** `go run . -seed`, wrapped as `make seed`, reuses the
+configuration, the pool, and the store the server already builds — a separate `cmd/seed` binary would
+have to repeat all three. It `TRUNCATE`s first, because a seeder that appends leaves four copies of the
+same customer after four runs, and `main` refuses to run it outside development: that environment check
+is the only thing between a stray flag and a wiped production database. The data is deliberately
+uneven — one customer with no vehicle, two parts out of stock — so the empty state and the dashboard's
+restocking list have something to show.
+
+## Milestone 6 — Service jobs ⬜ *(design proposed, awaiting approval)*
 
 The heart of the domain. A job is opened against a vehicle, moves through statuses, consumes parts
 from stock, and records labour.
 
 **Why late:** it depends on customers, vehicles, and parts all existing. Building it earlier would
 mean inventing fake versions of all three.
+
+**What is genuinely new here.** The first three modules were one table each, and every write touched
+one row. A job joins two tables that already exist and changes both at once: adding a part to a job
+writes a line *and* lowers stock. That is the first thing in this project that is wrong if it half
+happens, which makes it the first honest use of a database transaction — the item
+[backlog.md](backlog.md) deferred with exactly this trigger.
+
+### The design, in one paragraph
+
+A **service job** is opened against a **vehicle**, carries a description of what the customer
+reported, moves through a small set of statuses, accumulates **parts taken from stock**, and records a
+**labour charge**. Its total is labour plus the parts consumed. The customer is reached through the
+vehicle, never stored on the job.
+
+### Tables
+
+Two. `service_jobs` is the record; `job_parts` is the join between a job and the parts it consumed.
+
+```sql
+CREATE TABLE service_jobs (
+    id              BIGSERIAL PRIMARY KEY,
+    vehicle_id      BIGINT      NOT NULL REFERENCES vehicles (id) ON DELETE RESTRICT,
+    status          TEXT        NOT NULL DEFAULT 'received'
+                    CHECK (status IN ('received', 'in_progress', 'completed', 'cancelled')),
+    description     TEXT        NOT NULL,
+    labour_millimes INTEGER     NOT NULL DEFAULT 0 CHECK (labour_millimes >= 0),
+    opened_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX service_jobs_vehicle_id_idx ON service_jobs (vehicle_id);
+
+CREATE TABLE job_parts (
+    id       BIGSERIAL PRIMARY KEY,
+    job_id   BIGINT  NOT NULL REFERENCES service_jobs (id) ON DELETE CASCADE,
+    part_id  BIGINT  NOT NULL REFERENCES parts (id) ON DELETE RESTRICT,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    UNIQUE (job_id, part_id)
+);
+
+CREATE INDEX job_parts_job_id_idx ON job_parts (job_id);
+```
+
+### The decisions inside that schema
+
+**`status` is `TEXT` with a `CHECK`, not a PostgreSQL `ENUM`.** Both refuse a bad value. Adding a
+value to an enum is its own DDL statement with rules about transactions; changing a `CHECK` is a
+migration that drops and re-adds a constraint, which is ordinary SQL you can already read. Four
+statuses: `received` → `in_progress` → `completed`, with `cancelled` reachable from either of the
+first two. No "waiting for parts" — a real workshop has one, but it behaves identically to
+`in_progress` until something tells the two apart, and a state with no behaviour is a comment
+pretending to be data.
+
+**A job belongs to a vehicle, not to a customer.** Same reasoning as `vehicleFromPath` in Milestone 4:
+the customer is reachable through the vehicle, and storing both invites the row where they disagree.
+The cost is real and worth stating — a customer with no vehicle registered cannot have a job.
+
+**`ON DELETE RESTRICT` on `vehicle_id`, `CASCADE` on `job_id`.** A vehicle with service history cannot
+be deleted, consistent with Milestone 4. But a job's part lines have no meaning without the job, so
+they go with it. The difference is whether the child is a record in its own right.
+
+**Labour is one number, not a list of lines.** `labour_millimes` on the job. Itemised labour
+("diagnostics 1h, brakes 2h") is what an invoice usually prints, so the question becomes concrete at
+Milestone 7 — and gets deferred to [backlog.md](backlog.md) until it does. Money stays integer
+millimes, as established in Milestone 5.
+
+**`job_parts` has a surrogate `id` *and* `UNIQUE (job_id, part_id)`.** The unique constraint means one
+line per part, so a part added twice is a duplicate rather than two lines that have to be added up —
+and SQLSTATE 23505 is already translated to `store.ErrDuplicate`, so the form can point at the field
+with no new machinery. The surrogate `id` gives each line its own URL for removal.
+
+**No price on the line.** Copying `price_millimes` onto `job_parts` would freeze the price at the
+moment the part was used, which is the right answer for invoicing — and that is why it belongs to
+Milestone 7, where an invoice makes it concrete. Adding the column now means carrying a value nothing
+reads.
+
+**Jobs are cancelled, not deleted.** No delete route. A job that consumed parts cannot be deleted
+without deciding whether the stock comes back, and the domain already has a better word for "this is
+not happening". Removing a single *part line* does return stock, because that is a correction rather
+than a history.
+
+### Stock moves when the part leaves the shelf
+
+Adding a part to a job lowers `quantity_on_hand` immediately, not at completion, because that is when
+the mechanic physically takes it. Removing the line puts it back.
+
+Both writes must happen together or not at all, so this is where `pgx.Tx` enters the project. The
+`CHECK (quantity_on_hand >= 0)` constraint from Milestone 5 is what refuses to consume more than
+exists, and the store translates that failure into an error the form can show. Stock *movements* — a
+history rather than a number — stay in [backlog.md](backlog.md): the transaction is the lesson here,
+and one more concept in the same step would bury it.
+
+### Pages and routes
+
+Nested for creating, unnested for the rest — the rule settled in Milestone 4.
+
+| Route | What |
+| ----- | ---- |
+| `GET /jobs` | every job, newest first, filterable by status |
+| `GET /vehicles/:id/jobs/new` · `POST /vehicles/:id/jobs` | open a job against a vehicle |
+| `GET /jobs/:id` | the job: description, status, parts, labour, total |
+| `GET /jobs/:id/edit` · `POST /jobs/:id` | description and labour |
+| `POST /jobs/:id/status` | advance or cancel |
+| `POST /jobs/:id/parts` · `POST /jobs/:id/parts/:lineID/delete` | consume a part, return a part |
+
+Jobs also appear on the vehicle's row on the customer page, the way vehicles appear on the customer.
+The status filter is htmx — the answer lives in the database — matching the customer search.
+
+### What 6a settled
+
+**`closed_at` is not there yet.** The design sketched it, and 6a left it out: nothing sets it until
+statuses move, so it arrives with 6c. It is also the first nullable timestamp in the schema, and the
+`timestamptz → time.Time` override in `sqlc.yaml` covers the NOT NULL case only — a nullable one
+generates a `pgtype.Timestamptz`, which is exactly the pgx type that override exists to keep out of the
+templates. Worth deciding deliberately in the step that needs the column, rather than inheriting it.
+
+**The detail page does three lookups, not one join.** `GetJob` selects from `service_jobs` alone, and
+the handler follows `job.VehicleID` to the vehicle and `vehicle.CustomerID` to the owner, reusing the
+store methods that already exist. Three primary-key lookups cost almost nothing, and the alternative is
+a fourth generated row type for one page. The *list* does join, because there the alternative is a
+query per row.
+
+**`DeleteVehicle` now translates SQLSTATE 23503.** `service_jobs` is the first table to reference
+`vehicles`, so until 6a that translation was not needed and deleting a car that had been worked on
+would have been a 500. Caught by writing the test, which is the argument for writing it.
+
+**The store gained `DeleteJob` with no route to reach it.** Jobs are cancelled rather than deleted, but
+tests and the seeder have to leave the database as they found it. It is documented as such in both the
+query and the method.
+
+### Steps
+
+| Step | What | |
+| ---- | ---- | - |
+| 6a | `service_jobs` table, job list and detail (read-only), jobs shown on the customer page | ✅ |
+| 6b | Open a job against a vehicle; edit description and labour | ⬜ |
+| 6c | Status transitions, with the legal moves enforced in one place | ⬜ |
+| 6d | `job_parts`, consuming a part — **the first transaction** | ⬜ |
+| 6e | Remove a part line and return stock; job total; status filter over htmx | ⬜ |
 
 ## Milestone 7 — Invoicing ⬜
 

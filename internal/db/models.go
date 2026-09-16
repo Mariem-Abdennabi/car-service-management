@@ -25,6 +25,15 @@ type Part struct {
 	CreatedAt      time.Time
 }
 
+type ServiceJob struct {
+	ID             int64
+	VehicleID      int64
+	Status         string
+	Description    string
+	LabourMillimes int32
+	OpenedAt       time.Time
+}
+
 type Vehicle struct {
 	ID         int64
 	CustomerID int64

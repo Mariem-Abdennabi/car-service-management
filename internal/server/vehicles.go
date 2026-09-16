@@ -144,7 +144,15 @@ func (s *Server) handleDeleteVehicle(c *gin.Context) {
 		return
 	}
 
-	if err := s.store.DeleteVehicle(c.Request.Context(), vehicle.ID); err != nil {
+	err := s.store.DeleteVehicle(c.Request.Context(), vehicle.ID)
+	if errors.Is(err, store.ErrInUse) {
+		// The same shape as refusing to delete a customer with vehicles: the page
+		// comes back with the reason rather than a 500.
+		s.renderCustomerWithNotice(c, customer, "This vehicle has service jobs. Those have to go first.")
+
+		return
+	}
+	if err != nil {
 		serverError(c, err)
 
 		return

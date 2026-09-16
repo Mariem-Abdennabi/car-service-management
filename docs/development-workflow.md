@@ -49,6 +49,7 @@ There is no live reload for Go code: after changing a `.go` or `.templ` file, st
 | `make build` | compiles to `bin/server` (regenerates templates and assets first) |
 | `make templ` | regenerates Go from `.templ` files |
 | `make sqlc` | regenerates `internal/db` from `sql/queries` |
+| `make seed` | replaces all data with demo data — development only, destructive |
 | `make migrate-up` | applies pending migrations — the app also does this on startup |
 | `make migrate-down` | rolls back the most recent migration |
 | `make assets` | builds the Vite bundle into `public/build` |
